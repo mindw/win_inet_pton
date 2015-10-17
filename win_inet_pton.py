@@ -3,28 +3,7 @@
 # either in source code form or as a compiled binary, for any purpose,
 # commercial or non-commercial, and by any means.
 
-import socket
-import ctypes
 import os
-
-
-class sockaddr(ctypes.Structure):
-    _fields_ = [("sa_family", ctypes.c_short),
-                ("__pad1", ctypes.c_ushort),
-                ("ipv4_addr", ctypes.c_byte * 4),
-                ("ipv6_addr", ctypes.c_byte * 16),
-                ("__pad2", ctypes.c_ulong)]
-
-if hasattr(ctypes, 'windll'):
-    WSAStringToAddressA = ctypes.windll.ws2_32.WSAStringToAddressA
-    WSAAddressToStringA = ctypes.windll.ws2_32.WSAAddressToStringA
-else:
-    def not_windows():
-        raise SystemError(
-            "Invalid platform. ctypes.windll must be available."
-        )
-    WSAStringToAddressA = not_windows
-    WSAAddressToStringA = not_windows
 
 
 def inet_pton(address_family, ip_string):
@@ -32,8 +11,10 @@ def inet_pton(address_family, ip_string):
     addr.sa_family = address_family
     addr_size = ctypes.c_int(ctypes.sizeof(addr))
 
+    WSAStringToAddressA = ctypes.windll.ws2_32.WSAStringToAddressA
+
     if WSAStringToAddressA(
-            ip_string,
+            ip_string.encode('ascii'),
             address_family,
             None,
             ctypes.byref(addr),
@@ -67,6 +48,8 @@ def inet_ntop(address_family, packed_ip):
     else:
         raise socket.error('unknown address family')
 
+    WSAAddressToStringA = ctypes.windll.ws2_32.WSAAddressToStringA
+
     if WSAAddressToStringA(
             ctypes.byref(addr),
             addr_size,
@@ -80,5 +63,17 @@ def inet_ntop(address_family, packed_ip):
 
 # Adding our two functions to the socket library
 if os.name == 'nt':
-    socket.inet_pton = inet_pton
-    socket.inet_ntop = inet_ntop
+    import socket
+
+    if not hasattr(socket, 'inet_pton'):
+        import ctypes
+
+        class sockaddr(ctypes.Structure):
+            _fields_ = [("sa_family", ctypes.c_short),
+                ("__pad1", ctypes.c_ushort),
+                ("ipv4_addr", ctypes.c_byte * 4),
+                ("ipv6_addr", ctypes.c_byte * 16),
+                ("__pad2", ctypes.c_ulong)]
+
+        socket.inet_pton = inet_pton
+        socket.inet_ntop = inet_ntop
